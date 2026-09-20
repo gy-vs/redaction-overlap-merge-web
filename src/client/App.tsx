@@ -1,5 +1,6 @@
 import {useEffect,useState} from 'react';
 import {FlaskConical,Play,Save} from 'lucide-react';
+import RedactionPanel from './RedactionPanel';
 type Summary={id:string;name:string;revision:number;updatedAt:string};
 type Row=Summary&{content:string};
 export default function App(){
@@ -8,5 +9,11 @@ export default function App(){
   useEffect(()=>{setStatus('Loading');fetch('/api/documents/'+selected).then(r=>r.json()).then((value:Row)=>{setRow(value);setDraft(value.content);setStatus('Loaded')})},[selected]);
   async function save(){if(!row)return;setStatus('Saving');const response=await fetch('/api/documents/'+row.id,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({content:draft,revision:row.revision})});const value=await response.json();if(!response.ok){setStatus('Revision conflict');return}setRow(value);setStatus('Saved')}
   async function analyze(){if(!row)return;setStatus('Analyzing');const response=await fetch('/api/documents/'+row.id+'/analyze',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({content:draft})});setAnalysis(await response.json());setStatus('Ready')}
-  return <main className="shell"><header className="topbar"><FlaskConical size={20}/><strong>Redaction Review Studio</strong><small>Local workspace</small></header><section className="workspace"><aside className="pane"><h2>Items</h2><div className="list">{items.map(item=><button className={item.id===selected?'active':''} onClick={()=>setSelected(item.id)} key={item.id}>{item.name}<br/><small>Revision {item.revision}</small></button>)}</div></aside><section className="pane"><div className="toolbar"><button className="primary" onClick={save}><Save size={15}/>Save</button><button onClick={analyze}><Play size={15}/>Analyze</button><span>{status}</span></div><textarea aria-label="Content" value={draft} onChange={event=>setDraft(event.target.value)}/></section><aside className="pane"><h2>Inspection</h2><span className="pill">{selected}</span><pre>{JSON.stringify(analysis??row,null,2)}</pre></aside></section></main>;
+  function onRedacted(output:string,revision:number){
+    setDraft(output);
+    setRow((prev)=>prev?{...prev,content:output,revision}:prev);
+    setItems((prev)=>prev.map((item)=>item.id===selected?{...item,revision}:item));
+    setStatus(`Redacted & persisted at revision ${revision}`);
+  }
+  return <main className="shell"><header className="topbar"><FlaskConical size={20}/><strong>Redaction Review Studio</strong><small>Local workspace</small></header><section className="workspace"><aside className="pane"><h2>Items</h2><div className="list">{items.map(item=><button className={item.id===selected?'active':''} onClick={()=>setSelected(item.id)} key={item.id}>{item.name}<br/><small>Revision {item.revision}</small></button>)}</div></aside><section className="pane"><div className="toolbar"><button className="primary" onClick={save}><Save size={15}/>Save</button><button onClick={analyze}><Play size={15}/>Analyze</button><span>{status}</span></div><textarea aria-label="Content" value={draft} onChange={event=>setDraft(event.target.value)}/></section><aside className="pane wide"><h2>Inspection</h2><span className="pill">{selected}</span><pre>{JSON.stringify(analysis??row,null,2)}</pre></aside></section>{row&&<section className="redaction-pane"><RedactionPanel key={`${row.id}:${row.revision}`} docId={row.id} revision={row.revision} content={row.content} onPersisted={onRedacted}/></section>}</main>;
 }
